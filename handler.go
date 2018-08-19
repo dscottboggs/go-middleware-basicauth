@@ -13,6 +13,9 @@ func BasicAuth(
 ) (
 	http.ResponseWriter, *http.Request,
 ) {
+	if IsUnauthenticatedEndpoint(r.URL.RawQuery) {
+		return w, r
+	}
 	user, pass, ok := r.BasicAuth()
 	if !ok {
 		w.WriteHeader(http.StatusForbidden)

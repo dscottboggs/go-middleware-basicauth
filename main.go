@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"regexp"
 )
 
 // package constants
@@ -37,14 +38,50 @@ var ConfigLocation string
 // wordListLocation is where the word list should be stored
 var wordListLocation string
 
+var unauthenticated []*regexp.Regexp
+
+// IsUnauthenticatedEndpoint compares the given route to each of the
+// permissively-configured endpoints. If an enpdoint matches one of these
+// expressions, it will be allowed regardless of the BasicAuth header.
+func IsUnauthenticatedEndpoint(route string) bool {
+	for _, uRte := range unauthenticated {
+		if uRte.MatchString(route) {
+			return true
+		}
+	}
+	return false
+}
+
 func init() {
 	AllUsers = make(map[User]*AuthToken)
 	wordListLocation = path.Join(ConfigLocation, "..", "wordlist.txt")
 }
 
-// Initialize global variables
-func Initialize(config string) error {
+/* Initialize global variables
+ *
+ * @param config [string]: the location where the authentication tokens should
+ *		be stored, e.g. ~/.config/appname/auth.tokens
+ * @param unauthenticatedEndpoints [strings]: the remaining arguments are
+ *		regular expressions to be matched against for permissive endpoints.
+ *		These endpoints will be allowed through the BasicAuth handler regardless
+ *		of their actual basic authentication headers. This allows for, for
+ *		example, an unauthenticated login page or some scripts to load
+ *		regardless of authentication. The expression is concatenated with the
+ *		character '^', making it only match the beginning of the route path.
+ */
+func Initialize(config string, unauthenticatedEndpoints ...string) error {
 	ConfigLocation = config
+	for _, endpoint := range unauthenticatedEndpoints {
+		exp, err := regexp.Compile("^" + endpoint)
+		if err != nil {
+			return fmt.Errorf(
+				"Error parsing regular expression /%s/: %v",
+				endpoint,
+				err,
+			)
+		}
+		unauthenticated = append(unauthenticated, exp)
+	}
 	info, err := os.Stat(ConfigLocation)
 	if os.IsExist(err) || (err == nil && info.Size() > 0) {
 		AllUsers, err = ReadFrom(config)
